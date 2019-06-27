@@ -2,7 +2,7 @@
 extern crate cpython;
 
 use cpython::{Python, PyResult};
-use std::collections::{HashMap,HashSet}; 
+use std::collections::HashMap;
 
 fn calculate_haversine(mut lon : f64,mut lat: f64,mut lon_2: f64,mut lat_2: f64) -> f64 {
     lon = lon.to_radians();
@@ -17,7 +17,7 @@ fn calculate_haversine(mut lon : f64,mut lat: f64,mut lon_2: f64,mut lat_2: f64)
     c * r
 }
 
-fn total_function(_:Python,clicks:Vec<(i64,i64,f64,f64,i8,i64)>,historic :Vec<(i64,(Vec<f64>,Vec<f64>))>)-> PyResult<Vec<(i64,i64,Vec<usize>)>> {
+fn total_function(_:Python,clicks:Vec<(i64,i64,f64,f64,i8,i64)>,historic :Vec<(i64,(Vec<f64>,Vec<f64>))>)-> PyResult<Vec<(i64,i64,usize,usize,usize,usize,usize)>> {
     let mut historic_hash = HashMap::new();
     historic_hash.extend(historic);
     let mut accumulator = vec![];
@@ -30,7 +30,7 @@ fn total_function(_:Python,clicks:Vec<(i64,i64,f64,f64,i8,i64)>,historic :Vec<(i
    Ok(accumulator.into_iter().flat_map(|s| s).collect())
 }
 
-fn haversine_py(_:Python,clicks:Vec<(i64,i64,f64,f64,i8,i64)>,historic :Vec<(i64,(Vec<f64>,Vec<f64>))>)-> PyResult<Vec<(i64,i64,Vec<usize>)>> {
+fn haversine_py(_:Python,clicks:Vec<(i64,i64,f64,f64,i8,i64)>,historic :Vec<(i64,(Vec<f64>,Vec<f64>))>)-> PyResult<Vec<(i64,i64,usize,usize,usize,usize,usize)>> {
     let mut historic_hash = HashMap::new();
     historic_hash.extend(historic);
     let out = historic_distances(&clicks,&historic_hash); 
@@ -70,36 +70,47 @@ fn calculate_list_distance(lon:f64,lat:f64,lon_hist:&Vec<f64>,lat_hist:&Vec<f64>
         distances.push(calculate_haversine(lon,lat,lon_2,lat_2));
     }
     let mut within_radius = vec![];
-    for radius in [0.1,0.2,0.5,1.0,2.0,5.0,10.0,15.0].iter() {
+    for radius in [0.5,2.0,5.0,10.0].iter() {
         within_radius.push(distances.iter().filter(|&x| x < radius).count())
     }
     within_radius.push(distances.len());
     within_radius 
 }
 
-fn historic_distances(clicks:&Vec<(i64,i64,f64,f64,i8,i64)>,historic :&HashMap<i64,(Vec<f64>,Vec<f64>)>) -> Vec<(i64,i64,Vec<usize>)> {
+fn historic_distances(clicks:&Vec<(i64,i64,f64,f64,i8,i64)>,historic :&HashMap<i64,(Vec<f64>,Vec<f64>)>) -> Vec<(i64,i64,usize,usize,usize,usize,usize)> {
     let mut distances = vec![];
     for click in clicks {
         match historic.get(&click.0) {
             Some(coords) => {
-                distances.push(
-                    (click.0,
-                     click.1,
-                    calculate_list_distance(
+                let dist_list = calculate_list_distance(
                             click.2,
                             click.3,
                             &coords.0,
                             &coords.1
-                            )
-                        ) 
-                   ) 
+                );
+ 
+                distances.push(
+                    (
+                        click.0,
+                        click.1,
+                        dist_list[0],
+                        dist_list[1],
+                        dist_list[2],
+                        dist_list[3],
+                        dist_list[4]
+                    ) 
+                ) 
             },
             None => {
                 distances.push(
                     (
                         click.0,
                         click.1,
-                        vec![0;9]
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
                     )
                 )
             }
@@ -107,8 +118,6 @@ fn historic_distances(clicks:&Vec<(i64,i64,f64,f64,i8,i64)>,historic :&HashMap<i
     };
     distances 
 }
-
-            
 
 py_module_initializer!(libmyrustlib, initlibmyrustlib, PyInit_myrustlib, |py, m | {
     try!(m.add(py, "__doc__", "This module is implemented in Rust"));
